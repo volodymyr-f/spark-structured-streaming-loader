@@ -3,7 +3,7 @@ name := "SparkStructuredStreamingLoader"
 version := "0.0.1"
 
 scalaVersion := "2.11.8"
-  
+
 
 libraryDependencies ++= Seq(
     "org.apache.spark" %% "spark-streaming" % "2.1.0" withSources() withJavadoc(),
@@ -14,7 +14,4 @@ libraryDependencies ++= Seq(
     "log4j" % "log4j" % "1.2.14",
     "org.apache.spark" %% "spark-sql" % "2.1.0",
     "org.json4s" %% "json4s-native" % "3.2.10"
-
   )
-  
- 
