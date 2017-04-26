@@ -25,26 +25,38 @@ object KafkaConsumer {
 
   val mId = "m_id"
   val tenantId = "tenant_id"
-  val prevLink = "prev_link"
-  val currLink = "curr_link"
-  val timestampClicked = "timestamp_clicked"
-  val timestampReceived = "timestamp_received"
-  val message = "message"
-  val eventType = "type"
+  val day = "day"
+  val hour = "hour"
+  val lang = "lang"
+  val page = "page"
+  val lastRead = "last_read"
+  val lastUpd = "last_upd"
+  val lastCommitMessageText = "last_commit_message_text"
+  val hits = "hits"
+  val size = "size"  
 
   val messageSchema = StructType(Seq(
     StructField(mId, IntegerType, true),
     StructField(tenantId, IntegerType, true),
-    StructField(prevLink, StringType, true),
-    StructField(currLink, StringType, true),
-    StructField(timestampClicked, StringType, true),
-    StructField(timestampReceived, StringType, true),
-    StructField(message, StringType, true),
-    StructField(eventType, StringType, true)))
-
-  def insert(id: Int, tenantId: Int, prevLink: String, currLink: String, timestampСlicked: Timestamp, timestampReceived: Timestamp, message: String, messageType: String): String = s"""
-       insert into loader.events_raw (m_id, tenant_id, prev_link, curr_link, timestamp_clicked,timestamp_received,message,type)
-       values($id,$tenantId,'$prevLink','$currLink','$timestampСlicked','$timestampReceived','$message','$messageType')"""
+    StructField(day, StringType, true),
+    StructField(hour, IntegerType, true),
+    StructField(lang, StringType, true),
+    StructField(page, StringType, true),
+    StructField(lastRead, StringType, true),
+    StructField(lastUpd, StringType, true),
+    StructField(lastCommitMessageText, StringType, true),
+    StructField(hits, IntegerType, true),
+    StructField(size, IntegerType, true)  
+  ))
+  
+    def split(delimeter: String, value: String): String = {
+      val pos = 1
+      val langSplit = value.split(delimeter)
+      if (langSplit.length > pos) {
+       return  langSplit(pos)
+      }
+      return ""
+    }
 
   val log: Logger = LogManager.getLogger("Streaming Kafka Consumer")
 
@@ -52,7 +64,7 @@ object KafkaConsumer {
     .builder
     .master("local[2]")
     .appName("StructuredKafkaWordCount")
-    .config("spark.cassandra.connection.host", "192.168.33.10")
+    .config("spark.cassandra.connection.host", "192.168.33.11")
     .config("spark.cassandra.connection.port", "9042")
     .getOrCreate()
 
@@ -64,7 +76,8 @@ object KafkaConsumer {
     val dataFrame = spark
       .readStream
       .format("kafka")
-      .option("kafka.bootstrap.servers", "localhost:9092")
+      .option("kafka.bootstrap.servers", "192.168.33.10:9092")
+      .option("group.id", "hour_consumer")
       .option("subscribe", "loader_1")
       .load()
       .toDF()
@@ -77,7 +90,8 @@ object KafkaConsumer {
       .foreach(new ForeachWriter[Row] {
 
         override def process(value: Row): Unit = {
-          println("Processing row: ")
+          println("Processing row: " + value)
+
           insertRawRow(value)
         }
 
@@ -99,10 +113,19 @@ object KafkaConsumer {
     }
     date.getOrElse(Timestamp.valueOf(timeStr))
   }
+  
+    def insert(id: Int, tenantId: Int, day: String, hour: Int, lang: String, page: String, lastRead: Timestamp,lastUpd: Timestamp,  lastCommitMessageText: String, hits: Int, size: Int): String = {
+ 
+    val langSplit = split(".", lang)
+    val pageSplit = split(":", page)
+ 
+    s"""insert into loader.page_count_hourly (m_id, tenant_id, day, hour, lang, last_commit_message, last_read, last_upd, page, project_name, project_type, req_count, size)
+       values($id, $tenantId,'$day',$hour,'$lang','$lastCommitMessageText', '$lastRead', '$lastUpd', '$page', '$langSplit', '$pageSplit', $hits, $size)"""
+  }
 
   private def insertRawRow(row: Row) = {
     connector.withSessionDo { session =>
-      session.execute(insert(row.getAs(mId), row.getAs(tenantId), row.getAs(prevLink), row.getAs(currLink), getTimeStamp(row.getAs(timestampClicked)), getTimeStamp(row.getAs(timestampReceived)), row.getAs(message), row.getAs(eventType)))
+      session.execute(insert(row.getAs(mId), row.getAs(tenantId), row.getAs(day), row.getAs(hour), row.getAs(lang), row.getAs(page), getTimeStamp(row.getAs(lastRead)), getTimeStamp(row.getAs(lastUpd)), row.getAs(lastCommitMessageText), row.getAs(hits), row.getAs(size)))
     }
   }
 
